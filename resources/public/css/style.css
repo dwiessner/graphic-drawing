@@ -1,0 +1,32 @@
+/* some style */
+
+#line-button, #rect-button, #circ-button, #undo-button {
+  color:       #000;
+  background-color: #eee;
+  font:        bold 18px Arial,sans-serif;
+  border:      1px solid #900;
+  margin:      10px;
+  padding:     5px;
+  box-shadow:  5px 5px 5px #888888;
+  border-radius: 25px;
+  width: 150px;
+}
+
+body {
+background-color: Gray;
+}
+
+svg {
+  background-color: White;
+  width: 600;
+  height: 600;
+  stroke: #000;
+}
+
+#palette {
+  position: fixed;
+  top: 100;
+  left: 0;
+  border: 1px solid red;
+
+}
