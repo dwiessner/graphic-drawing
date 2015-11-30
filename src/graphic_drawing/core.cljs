@@ -12,20 +12,21 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (ns graphic-drawing.core
-  (:require [reagent.core :as r :refer [atom]]))
+  (:require [reagent.core :as r :refer [atom]]
+            [schema.core :as s :include-macros true]))
 
 ;; Just for testing. Remove prior to release
 (enable-console-print!)
 
 ;; big ratom for holding application data
-(defonce shape-data (r/atom {:first-x       "none"
-                             :first-y       "none"
-                             :second-x      "none"
-                             :second-y      "none"
-                             :shape         :none
-                             :click-count   :first
-                             :shape-list    '()}
-                             :current-shape "none"))
+(defonce shape-data (r/atom {:first-x       s/Num
+                             :first-y       s/Num
+                             :second-x      s/Num
+                             :second-y      s/Num
+                             :shape         s/Keyword
+                             :been-clicked? false
+                             :shape-list    '()
+                             :current-shape '()}))
 
 ;; Handles into the big ratom
 (def shape         (r/cursor shape-data [:shape]))
@@ -33,7 +34,7 @@
 (def first-y       (r/cursor shape-data [:first-y]))
 (def second-x      (r/cursor shape-data [:second-x]))
 (def second-y      (r/cursor shape-data [:second-y]))
-(def click-count   (r/cursor shape-data [:click-count]))
+(def been-clicked? (r/cursor shape-data [:been-clicked?]))
 (def shape-list    (r/cursor shape-data [:shape-list]))
 (def current-shape (r/cursor shape-data [:current-shape]))
 
@@ -55,12 +56,12 @@
   "Handles line drawing based on user input"
   [pos]
   (cond
-    (= :first  @click-count)((reset! first-x (.-clientX pos))
+    (= false @been-clicked?)((reset! first-x (.-clientX pos))
                              (reset! first-y (- (.-clientY pos) 60))
-                             (reset! click-count :second))
-    (= :second @click-count)((reset! second-x (.-clientX pos))
+                             (reset! been-clicked? true))
+    (= true  @been-clicked?)((reset! second-x (.-clientX pos))
                              (reset! second-y (- (.-clientY pos) 60))
-                             (reset! click-count :first)
+                             (reset! been-clicked? false)
                              (swap!  shape-list conj
                                 (vector :line {:x1 @first-x
                                                :y1 @first-y
@@ -73,7 +74,7 @@
 (defn handle-moving-line!
   "Handles line drawing based on user input"
   [pos]
-  (when (= :second @click-count)
+  (when (= true @been-clicked?)
           ((reset! second-x (.-clientX pos))
            (reset! second-y (- (.-clientY pos) 60))
            (reset! current-shape
@@ -89,14 +90,14 @@
   "Handles circle drawing based on user input"
   [pos]
   (cond
-    (= :first @click-count)
+    (= false @been-clicked?)
         ((reset! first-x (.-clientX pos))
          (reset! first-y (- (.-clientY pos) 60))
-         (reset! click-count :second))
-    (= :second @click-count)
+         (reset! been-clicked? true))
+    (= true @been-clicked?)
         ((reset! second-x (.-clientX pos))
          (reset! second-y (- (.-clientY pos) 60))
-         (reset! click-count :first)
+         (reset! been-clicked? false)
          (swap! shape-list conj
             (vector :circle {:cx @first-x
                              :cy @first-y
@@ -116,7 +117,7 @@
 (defn handle-moving-circ!
   "Handles circle moving based on user input"
   [pos]
-  (when (= :second @click-count)
+  (when (= true @been-clicked?)
         ((reset! second-x (.-clientX pos))
          (reset! second-y (- (.-clientY pos) 60))
          (reset! current-shape
@@ -130,8 +131,8 @@
                                     (sqr
                                       (- (max @first-y @second-y)
                                          (min @first-y @second-y)))))
-                              :fill "none"
-                              :stroke "red"})))))
+                             :fill "none"
+                             :stroke "red"})))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -139,14 +140,14 @@
   "Handles rectangle drawing based on user input"
   [pos]
   (cond
-    (= :first @click-count)
+    (= false @been-clicked?)
        ((reset! first-x (.-clientX pos))
         (reset! first-y (- (.-clientY pos) 60))
-        (reset! click-count :second))
-    (= :second @click-count)
+        (reset! been-clicked? true))
+    (= true @been-clicked?)
         ((reset! second-x (.-clientX pos))
          (reset! second-y (- (.-clientY pos) 60))
-         (reset! click-count :first)
+         (reset! been-clicked? false)
          (swap! shape-list conj
             (vector :rect {:x (min @first-x @second-x)
                            :y (min @first-y @second-y)
@@ -160,7 +161,7 @@
 (defn handle-moving-rect!
   "Handles rectangle moving based on user input"
   [pos]
-  (when (= :second @click-count)
+  (when (= true @been-clicked?)
           ((reset! second-x (.-clientX pos))
            (reset! second-y (- (.-clientY pos) 60))
            (reset! current-shape
@@ -192,18 +193,27 @@
 (defn handle-circ-button-click!
   "This function handles user clicking the circle button"
   []
-  (reset! shape :circ))
+  (reset! shape :circle))
 
 
 (defn handle-undo-button-click!
   "This function handles user clicking the undo button"
   []
   (cond
-    (= :first  @click-count)
-        (swap!  shape-list rest @shape-list)
-    (= :second @click-count)
+    (= false  @been-clicked?)
+      (let [mode (first (first @shape-list))]
+        (if (= mode @shape)
+            (swap!  shape-list rest @shape-list)
+            (cond
+              (= mode :line)
+                (handle-line-button-click!)
+              (= mode :circle)
+                (handle-circ-button-click!)
+              (= mode :rect)
+                (handle-rect-button-click!))))
+    (= true @been-clicked?)
        ((reset! current-shape "none")
-        (reset! click-count :first))))
+        (reset! been-clicked? false))))
 
 
 (defn handle-palette-click!
@@ -211,7 +221,7 @@
   [pos]
   (cond
     (= :line @shape)(handle-drawing-line! pos)
-    (= :circ @shape)(handle-drawing-circ! pos)
+    (= :circle @shape)(handle-drawing-circ! pos)
     (= :rect @shape)(handle-drawing-rect! pos)))
 
 
@@ -220,7 +230,7 @@
   [pos]
   (cond
     (= :line @shape)(handle-moving-line! pos)
-    (= :circ @shape)(handle-moving-circ! pos)
+    (= :circle @shape)(handle-moving-circ! pos)
     (= :rect @shape)(handle-moving-rect! pos)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -232,15 +242,24 @@
 (defn main []
   [:div
     [:div
-      [:input#line-button {:type "button"
+      (if (= :line @shape)[:input#line-button-clicked {:type "button"
                            :on-click handle-line-button-click!
                            :value (str " LINE ")}]
-      [:input#rect-button {:type "button"
+                          [:input#line-button {:type "button"
+                           :on-click handle-line-button-click!
+                           :value (str " LINE ")}])
+      (if (= :rect @shape)[:input#rect-button-clicked {:type "button"
                            :on-click handle-rect-button-click!
                            :value (str " RECTANGLE ")}]
-      [:input#circ-button {:type "button"
+                          [:input#rect-button {:type "button"
+                           :on-click handle-rect-button-click!
+                           :value (str " RECTANGLE ")}])
+      (if (= :circle @shape)[:input#circ-button-clicked {:type "button"
                            :on-click handle-circ-button-click!
                            :value (str " CIRCLE ")}]
+                          [:input#circ-button {:type "button"
+                           :on-click handle-circ-button-click!
+                           :value (str " CIRCLE ")}])
       [:input#undo-button {:type "button"
                            :on-click handle-undo-button-click!
                            :value (str " UNDO ")}]]
